@@ -59,8 +59,18 @@ const isOverlay=params.get("overlay")==="1";
 const roomFromUrl=params.get("room");
 let app,db,unsubscribe=null;
 let state={title:"IKYY LIVE",text:"FOLLOW DULU • LIKE LIVE • PUSH RANK BARENG IKYY"};
+const DEFAULT_FIREBASE_CONFIG = {
+  "apiKey": "AIzaSyBk7j1YozbLqYo8qo_qwK5vtkHSMMCEsSo",
+  "authDomain": "note-36c45.firebaseapp.com",
+  "databaseURL": "https://note-36c45-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "projectId": "note-36c45",
+  "storageBucket": "note-36c45.firebasestorage.app",
+  "messagingSenderId": "775252918146",
+  "appId": "1:775252918146:web:6ddae8efe2daa67001599b",
+  "measurementId": "G-M6WR58YF2Q"
+};
 const savedConfig=localStorage.getItem("ikyyFirebaseConfig");
-if(savedConfig) $("config").value=savedConfig;
+if($("config")) $("config").value=savedConfig || JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
 if(isOverlay){
  document.body.classList.add("overlay");
  $("setup").remove();$("urls").remove();$("firebaseHelp").remove();
@@ -81,8 +91,7 @@ function draw(s){
  else {$("title").value=state.title||"";$("notes").value=state.text||"";}
 }
 async function connect(){
- const raw=localStorage.getItem("ikyyFirebaseConfig");
- if(!raw){if($("status"))$("status").textContent="Belum tersambung. Masukkan Firebase config satu kali.";return;}
+ const raw=localStorage.getItem("ikyyFirebaseConfig") || JSON.stringify(DEFAULT_FIREBASE_CONFIG);
  try{
    const cfg=JSON.parse(raw);
    if(!app){app=initializeApp(cfg);db=getDatabase(app);}
