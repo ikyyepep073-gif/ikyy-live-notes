@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>IKYY Live Notes</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#151d30;--line:#2c3851;--text:#f3f6ff;--muted:#aab5ca;--accent:#8b5cf6;--green:#22c55e}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1020,#17102b);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
+    .wrap{max-width:760px;margin:auto;padding:22px 15px 48px}.brand{font-size:13px;letter-spacing:.16em;color:#c4b5fd;font-weight:800}.hero h1{margin:8px 0;font-size:clamp(28px,7vw,42px)}.hero p,.muted{color:var(--muted);line-height:1.5}
+    .card{background:rgba(21,29,48,.95);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:16px;box-shadow:0 12px 32px #0002}
+    label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}input,textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#0b1222;color:var(--text);font:inherit}textarea{min-height:150px;resize:vertical}
+    button,.btn{border:0;border-radius:10px;background:var(--accent);color:white;padding:11px 15px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;margin:8px 6px 0 0}button.secondary{background:#334155}button.green{background:#15803d}button:disabled{opacity:.5;cursor:wait}
+    .row{display:flex;gap:8px;flex-wrap:wrap}.status{font-size:13px;color:#c4b5fd;min-height:20px;margin-top:10px}.hidden{display:none!important}.share{overflow-wrap:anywhere;background:#0b1222;border:1px solid var(--line);padding:11px;border-radius:10px;margin-top:8px}.pill{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:5px 9px;color:var(--muted)}.topline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    body.overlay-mode{background:transparent;min-height:100vh}.overlay-shell{padding:14px;width:100%}.overlay-note{display:inline-block;max-width:100%;background:rgba(8,12,22,.86);border:2px solid #a78bfa;border-radius:12px;padding:12px 16px;box-shadow:0 5px 22px #0007;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:750;font-size:clamp(18px,3.2vw,32px);line-height:1.35;text-shadow:0 2px 3px #000}
+    .small{font-size:12px;color:var(--muted)}.error{color:#fca5a5}.ok{color:#86efac}
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app">
+    <header class="hero">
+      <div class="brand">IKYY • STREAM TOOLS</div>
+      <h1>IKYY Live Notes</h1>
+      <p>Buat catatan untuk live dan tampilkan sebagai overlay. Setiap akun memiliki catatan sendiri.</p>
+    </header>
+
+    <section class="card" id="authCard">
+      <h2>Masuk atau buat akun</h2>
+      <p class="muted">Gunakan email dan password. Akun ini disediakan oleh Firebase Authentication.</p>
+      <label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="nama@email.com">
+      <label for="password">Password (minimal 6 karakter)</label><input id="password" type="password" autocomplete="current-password" placeholder="Password">
+      <div class="row">
+        <button id="signupBtn">Buat akun</button><button id="loginBtn" class="secondary">Login</button>
+      </div>
+      <div id="authStatus" class="status" role="status"></div>
+    </section>
+
+    <section class="card hidden" id="editorCard">
+      <div class="topline"><h2>Editor catatan</h2><span class="pill" id="accountLabel"></span></div>
+      <p class="muted">Teks yang disimpan di sini akan muncul pada link overlay kamu.</p>
+      <label for="noteTitle">Judul (opsional)</label><input id="noteTitle" maxlength="80" placeholder="Contoh: IKYY LIVE">
+      <label for="noteText">Isi catatan</label><textarea id="noteText" maxlength="1500" placeholder="Tulis catatan, jadwal, target, atau pesan untuk penonton..."></textarea>
+      <div class="row"><button id="saveBtn" class="green">Simpan catatan</button><button id="logoutBtn" class="secondary">Logout</button></div>
+      <div id="editorStatus" class="status" role="status"></div>
+      <h3>Link overlay kamu</h3>
+      <p class="muted">Masukkan link ini sebagai Browser Source di OBS atau aplikasi streaming yang mendukung URL overlay.</p>
+      <div class="share" id="overlayLink">Link akan muncul setelah login.</div>
+      <div class="row"><button id="copyBtn" class="secondary">Salin link overlay</button><a id="openOverlay" class="btn" target="_blank" rel="noopener">Buka overlay</a></div>
+      <p class="small">Siapa pun yang memiliki link overlay dapat melihat teks yang kamu pilih untuk ditampilkan. Jangan tulis informasi pribadi.</p>
+    </section>
+    <footer class="small" style="padding:18px 4px">IKYY Live Notes • Firebase Realtime Database</footer>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+
+    // Firebase config supplied by the site owner
+    const firebaseConfig = {
+      apiKey: "AIzaSyBk7j1YozbLqYo8qo_qwK5vtkHSMMCEsSo",
+      authDomain: "note-36c45.firebaseapp.com",
+      databaseURL: "https://note-36c45-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "note-36c45",
+      storageBucket: "note-36c45.firebasestorage.app",
+      messagingSenderId: "775252918146",
+      appId: "1:775252918146:web:6ddae8efe2daa67001599b",
+      measurementId: "G-M6WR58YF2Q"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+    const $ = id => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    const overlayUid = params.get("overlay");
+
+    function showStatus(id, message, type="") {
+      const el = $(id); if (!el) return;
+      el.textContent = message; el.className = "status " + type;
+    }
+    function readableError(error) {
+      const map = {
+        "auth/email-already-in-use":"Email ini sudah terdaftar.",
+        "auth/invalid-email":"Format email tidak valid.",
+        "auth/weak-password":"Password terlalu lemah; gunakan minimal 6 karakter.",
+        "auth/invalid-credential":"Email atau password salah.",
+        "auth/user-not-found":"Akun tidak ditemukan.",
+        "auth/too-many-requests":"Terlalu banyak percobaan. Coba lagi nanti.",
+        "auth/operation-not-allowed":"Login Email/Password belum diaktifkan di Firebase Authentication.",
+        "PERMISSION_DENIED":"Akses database ditolak. Periksa Rules Realtime Database."
+      };
+      return map[error.code] || error.message || "Terjadi kesalahan.";
+    }
+
+    // Overlay-only page: /?overlay=FIREBASE_USER_UID
+    if (overlayUid) {
+      document.body.classList.add("overlay-mode");
+      $("app").classList.add("hidden");
+      const shell = document.createElement("div");
+      shell.className = "overlay-shell";
+      shell.innerHTML = '<div class="overlay-note" id="overlayNote">Memuat catatan…</div>';
+      document.body.appendChild(shell);
+      onValue(ref(db, "overlays/" + overlayUid), snap => {
+        const data = snap.val();
+        const note = document.getElementById("overlayNote");
+        if (!data) { note.textContent = "Catatan belum tersedia"; return; }
+        note.textContent = [data.title, data.text].filter(Boolean).join("\\n");
+        note.style.display = (data.visible === false || (!data.title && !data.text)) ? "none" : "inline-block";
+        if (data.fontSize) note.style.fontSize = Math.max(12, Math.min(64, Number(data.fontSize))) + "px";
+      }, err => {
+        document.getElementById("overlayNote").textContent = "Tidak dapat memuat overlay.";
+        console.error(err);
+      });
+    } else {
+      $("signupBtn").addEventListener("click", async () => {
+        const email = $("email").value.trim(), password = $("password").value;
+        if (!email || !password) return showStatus("authStatus", "Isi email dan password dulu.", "error");
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+          showStatus("authStatus", "Akun berhasil dibuat.", "ok");
+        } catch(e) { showStatus("authStatus", readableError(e), "error"); }
+      });
+      $("loginBtn").addEventListener("click", async () => {
+        const email = $("email").value.trim(), password = $("password").value;
+        if (!email || !password) return showStatus("authStatus", "Isi email dan password dulu.", "error");
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          showStatus("authStatus", "Login berhasil.", "ok");
+        } catch(e) { showStatus("authStatus", readableError(e), "error"); }
+      });
+      $("logoutBtn").addEventListener("click", () => signOut(auth));
+      $("saveBtn").addEventListener("click", async () => {
+        const user = auth.currentUser; if (!user) return;
+        const data = {
+          title: $("noteTitle").value.trim().slice(0,80),
+          text: $("noteText").value.slice(0,1500),
+          visible: true,
+          updatedAt: Date.now()
+        };
+        $("saveBtn").disabled = true;
+        try {
+          await set(ref(db, "users/" + user.uid + "/note"), data);
+          await set(ref(db, "overlays/" + user.uid), data);
+          showStatus("editorStatus", "Catatan tersimpan dan overlay diperbarui.", "ok");
+        } catch(e) { showStatus("editorStatus", readableError(e), "error"); }
+        finally { $("saveBtn").disabled = false; }
+      });
+      $("copyBtn").addEventListener("click", async () => {
+        const text = $("overlayLink").textContent;
+        try { await navigator.clipboard.writeText(text); showStatus("editorStatus", "Link overlay disalin.", "ok"); }
+        catch { showStatus("editorStatus", "Salin link dengan menekan lama teks link.", "error"); }
+      });
+      onAuthStateChanged(auth, async user => {
+        $("authCard").classList.toggle("hidden", !!user);
+        $("editorCard").classList.toggle("hidden", !user);
+        if (!user) return;
+        $("accountLabel").textContent = user.email || "Akun";
+        const overlayUrl = location.origin + location.pathname + "?overlay=" + encodeURIComponent(user.uid);
+        $("overlayLink").textContent = overlayUrl;
+        $("openOverlay").href = overlayUrl;
+        try {
+          const snap = await get(ref(db, "users/" + user.uid + "/note"));
+          const data = snap.val();
+          $("noteTitle").value = data?.title || "";
+          $("noteText").value = data?.text || "";
+        } catch(e) { showStatus("editorStatus", readableError(e), "error"); }
+      });
+    }
+  </script>
+</body>
+</html>
